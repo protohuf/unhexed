@@ -1480,7 +1480,7 @@ func (m *Model) renderDecoder() string {
 	}
 	b.WriteString("\n")
 
-	// Integer values (8-64 bit)
+	// Integer values (8-32 bit)
 	vals := []struct {
 		label  string
 		size   int
@@ -1489,7 +1489,6 @@ func (m *Model) renderDecoder() string {
 		{"u8", 1, false}, {"i8", 1, true},
 		{"u16", 2, false}, {"i16", 2, true},
 		{"u32", 4, false}, {"i32", 4, true},
-		{"u64", 8, false}, {"i64", 8, true},
 	}
 
 	for _, v := range vals {
@@ -1500,6 +1499,22 @@ func (m *Model) renderDecoder() string {
 			b.WriteString("-")
 		}
 		b.WriteString("  ")
+	}
+	b.WriteString("\n")
+
+	// 64-bit integers (separate row)
+	b.WriteString(m.styles.DecoderLabel.Render("u64: "))
+	if len(bytes) >= 8 {
+		b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:8], false)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("  ")
+	b.WriteString(m.styles.DecoderLabel.Render("i64: "))
+	if len(bytes) >= 8 {
+		b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:8], true)))
+	} else {
+		b.WriteString("-")
 	}
 	b.WriteString("\n")
 
