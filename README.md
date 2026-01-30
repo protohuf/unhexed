@@ -3,3 +3,7 @@
 _Break the curse of clunky hex editors_
 
 ![Screenshot of Unhexed](meta/unhexed.png)
+
+## Compile
+
+go build .
