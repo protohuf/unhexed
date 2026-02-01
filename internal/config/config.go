@@ -22,6 +22,10 @@ type Theme struct {
 	SelectionBackground     string `toml:"selection_background"`
 	UnsavedFileColor        string `toml:"unsaved_file_color"`
 	DisabledColor           string `toml:"disabled_color"`
+	Bit16Background         string `toml:"bit16_background"`
+	Bit32Background         string `toml:"bit32_background"`
+	Bit64Background         string `toml:"bit64_background"`
+	Bit128Background        string `toml:"bit128_background"`
 }
 
 type Config struct {
@@ -44,6 +48,10 @@ func DefaultConfig() *Config {
 			SelectionBackground:     "#FFAA00",
 			UnsavedFileColor:        "#FF0000",
 			DisabledColor:           "#666666",
+			Bit16Background:         "#004400",
+			Bit32Background:         "#440044",
+			Bit64Background:         "#004444",
+			Bit128Background:        "#444400",
 		},
 	}
 }
@@ -109,6 +117,10 @@ type Styles struct {
 	HelpTitle       lipgloss.Style
 	HelpKey         lipgloss.Style
 	HelpDesc        lipgloss.Style
+	Bit16           lipgloss.Style
+	Bit32           lipgloss.Style
+	Bit64           lipgloss.Style
+	Bit128          lipgloss.Style
 }
 
 func NewStyles(theme *Theme) *Styles {
@@ -163,5 +175,17 @@ func NewStyles(theme *Theme) *Styles {
 			Bold(true),
 		HelpDesc: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#AAAAAA")),
+		Bit16: lipgloss.NewStyle().
+			Background(lipgloss.Color(theme.Bit16Background)).
+			Foreground(lipgloss.Color("#FFFFFF")),
+		Bit32: lipgloss.NewStyle().
+			Background(lipgloss.Color(theme.Bit32Background)).
+			Foreground(lipgloss.Color("#FFFFFF")),
+		Bit64: lipgloss.NewStyle().
+			Background(lipgloss.Color(theme.Bit64Background)).
+			Foreground(lipgloss.Color("#FFFFFF")),
+		Bit128: lipgloss.NewStyle().
+			Background(lipgloss.Color(theme.Bit128Background)).
+			Foreground(lipgloss.Color("#FFFFFF")),
 	}
 }

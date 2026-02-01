@@ -1393,10 +1393,9 @@ func (m *Model) renderEditor() string {
 					style = m.styles.MarkerNormal
 				}
 			} else if ok {
-				// Endian highlighting
-				endianStart, endianEnd := m.getEndianRange(tab.Cursor)
-				if offset >= endianStart && offset <= endianEnd && offset != tab.Cursor {
-					style = m.styles.Endian
+				// Bit-width color coding for decoder panel correspondence
+				if bitStyle := m.getBitWidthStyle(offset, tab.Cursor); bitStyle != nil {
+					style = *bitStyle
 				}
 			}
 
@@ -1428,6 +1427,41 @@ func (m *Model) getEndianRange(cursor int64) (int64, int64) {
 	return cursor - 15, cursor
 }
 
+func (m *Model) getBitWidthStyle(offset, cursor int64) *lipgloss.Style {
+	if m.bigEndian {
+		delta := offset - cursor
+		if delta <= 0 || delta > 15 {
+			return nil
+		}
+		switch {
+		case delta == 1:
+			return &m.styles.Bit16
+		case delta >= 2 && delta <= 3:
+			return &m.styles.Bit32
+		case delta >= 4 && delta <= 7:
+			return &m.styles.Bit64
+		case delta >= 8 && delta <= 15:
+			return &m.styles.Bit128
+		}
+	} else {
+		delta := cursor - offset
+		if delta <= 0 || delta > 15 {
+			return nil
+		}
+		switch {
+		case delta == 1:
+			return &m.styles.Bit16
+		case delta >= 2 && delta <= 3:
+			return &m.styles.Bit32
+		case delta >= 4 && delta <= 7:
+			return &m.styles.Bit64
+		case delta >= 8 && delta <= 15:
+			return &m.styles.Bit128
+		}
+	}
+	return nil
+}
+
 func (m *Model) renderDecoder() string {
 	tab := m.currentTab()
 	if tab == nil {
@@ -1448,104 +1482,140 @@ func (m *Model) renderDecoder() string {
 	bytes := m.getDecoderBytes(16)
 
 	// Bit string (128 bits) - split into two rows of 64 bits each
+	// Color coded by bit-width: byte 0 = marker, byte 1 = 16-bit, bytes 2-3 = 32-bit, etc.
 	// First row: Bits (0-63) - bytes 0-7
 	b.WriteString(m.styles.DecoderLabel.Render("Bits (0-63):   "))
 	if len(bytes) > 0 {
-		var bits strings.Builder
 		for i := 0; i < 8 && i < len(bytes); i++ {
 			if i > 0 {
-				bits.WriteString(" ")
+				b.WriteString(" ")
 			}
-			bits.WriteString(fmt.Sprintf("%08b", bytes[i]))
+			bitStr := fmt.Sprintf("%08b", bytes[i])
+			// Apply color based on byte index
+			switch {
+			case i == 0:
+				b.WriteString(m.styles.MarkerNormal.Render(bitStr))
+			case i == 1:
+				b.WriteString(m.styles.Bit16.Render(bitStr))
+			case i >= 2 && i <= 3:
+				b.WriteString(m.styles.Bit32.Render(bitStr))
+			case i >= 4 && i <= 7:
+				b.WriteString(m.styles.Bit64.Render(bitStr))
+			}
 		}
-		b.WriteString(m.styles.DecoderValue.Render(bits.String()))
 	} else {
 		b.WriteString("-")
 	}
 	b.WriteString("\n")
 
-	// Second row: Bits (64-127) - bytes 8-15
+	// Second row: Bits (64-127) - bytes 8-15 (all 128-bit color)
 	b.WriteString(m.styles.DecoderLabel.Render("Bits (64-127): "))
 	if len(bytes) > 8 {
-		var bits strings.Builder
 		for i := 8; i < 16 && i < len(bytes); i++ {
 			if i > 8 {
-				bits.WriteString(" ")
+				b.WriteString(" ")
 			}
-			bits.WriteString(fmt.Sprintf("%08b", bytes[i]))
+			bitStr := fmt.Sprintf("%08b", bytes[i])
+			b.WriteString(m.styles.Bit128.Render(bitStr))
 		}
-		b.WriteString(m.styles.DecoderValue.Render(bits.String()))
 	} else {
 		b.WriteString("-")
 	}
 	b.WriteString("\n")
 
-	// Integer values (8-32 bit)
-	vals := []struct {
-		label  string
-		size   int
-		signed bool
-	}{
-		{"u8", 1, false}, {"i8", 1, true},
-		{"u16", 2, false}, {"i16", 2, true},
-		{"u32", 4, false}, {"i32", 4, true},
-	}
-
-	for _, v := range vals {
-		b.WriteString(m.styles.DecoderLabel.Render(fmt.Sprintf("%s: ", v.label)))
-		if len(bytes) >= v.size {
-			b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:v.size], v.signed)))
-		} else {
-			b.WriteString("-")
-		}
-		b.WriteString("  ")
-	}
-	b.WriteString("\n")
-
-	// 64-bit integers (separate row)
-	b.WriteString(m.styles.DecoderLabel.Render("u64: "))
-	if len(bytes) >= 8 {
-		b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:8], false)))
+	// Integer values (8-32 bit) with bit-width color coding
+	// u8/i8 - uses MarkerNormal style (matches cursor byte in hex panel)
+	b.WriteString(m.styles.MarkerNormal.Render("u8: "))
+	if len(bytes) >= 1 {
+		b.WriteString(m.styles.MarkerNormal.Render(m.formatInt(bytes[:1], false)))
 	} else {
 		b.WriteString("-")
 	}
 	b.WriteString("  ")
-	b.WriteString(m.styles.DecoderLabel.Render("i64: "))
-	if len(bytes) >= 8 {
-		b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:8], true)))
-	} else {
-		b.WriteString("-")
-	}
-	b.WriteString("\n")
-
-	// 128-bit integers (separate row)
-	b.WriteString(m.styles.DecoderLabel.Render("u128: "))
-	if len(bytes) >= 16 {
-		b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:16], false)))
+	b.WriteString(m.styles.MarkerNormal.Render("i8: "))
+	if len(bytes) >= 1 {
+		b.WriteString(m.styles.MarkerNormal.Render(m.formatInt(bytes[:1], true)))
 	} else {
 		b.WriteString("-")
 	}
 	b.WriteString("  ")
-	b.WriteString(m.styles.DecoderLabel.Render("i128: "))
-	if len(bytes) >= 16 {
-		b.WriteString(m.styles.DecoderValue.Render(m.formatInt(bytes[:16], true)))
+
+	// u16/i16 - uses Bit16 style
+	b.WriteString(m.styles.Bit16.Render("u16: "))
+	if len(bytes) >= 2 {
+		b.WriteString(m.styles.Bit16.Render(m.formatInt(bytes[:2], false)))
 	} else {
 		b.WriteString("-")
 	}
-	b.WriteString("\n")
+	b.WriteString("  ")
+	b.WriteString(m.styles.Bit16.Render("i16: "))
+	if len(bytes) >= 2 {
+		b.WriteString(m.styles.Bit16.Render(m.formatInt(bytes[:2], true)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("  ")
 
-	// Float values
-	b.WriteString(m.styles.DecoderLabel.Render("f32: "))
+	// u32/i32 - uses Bit32 style
+	b.WriteString(m.styles.Bit32.Render("u32: "))
 	if len(bytes) >= 4 {
-		b.WriteString(m.styles.DecoderValue.Render(m.formatFloat32(bytes[:4])))
+		b.WriteString(m.styles.Bit32.Render(m.formatInt(bytes[:4], false)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("  ")
+	b.WriteString(m.styles.Bit32.Render("i32: "))
+	if len(bytes) >= 4 {
+		b.WriteString(m.styles.Bit32.Render(m.formatInt(bytes[:4], true)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("\n")
+
+	// 64-bit integers (separate row) - uses Bit64 style
+	b.WriteString(m.styles.Bit64.Render("u64: "))
+	if len(bytes) >= 8 {
+		b.WriteString(m.styles.Bit64.Render(m.formatInt(bytes[:8], false)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("  ")
+	b.WriteString(m.styles.Bit64.Render("i64: "))
+	if len(bytes) >= 8 {
+		b.WriteString(m.styles.Bit64.Render(m.formatInt(bytes[:8], true)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("\n")
+
+	// 128-bit integers (separate row) - uses Bit128 style
+	b.WriteString(m.styles.Bit128.Render("u128: "))
+	if len(bytes) >= 16 {
+		b.WriteString(m.styles.Bit128.Render(m.formatInt(bytes[:16], false)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("  ")
+	b.WriteString(m.styles.Bit128.Render("i128: "))
+	if len(bytes) >= 16 {
+		b.WriteString(m.styles.Bit128.Render(m.formatInt(bytes[:16], true)))
+	} else {
+		b.WriteString("-")
+	}
+	b.WriteString("\n")
+
+	// Float values - use corresponding bit-width styles
+	b.WriteString(m.styles.Bit32.Render("f32: "))
+	if len(bytes) >= 4 {
+		b.WriteString(m.styles.Bit32.Render(m.formatFloat32(bytes[:4])))
 	} else {
 		b.WriteString("-")
 	}
 	b.WriteString("  ")
 
-	b.WriteString(m.styles.DecoderLabel.Render("f64: "))
+	b.WriteString(m.styles.Bit64.Render("f64: "))
 	if len(bytes) >= 8 {
-		b.WriteString(m.styles.DecoderValue.Render(m.formatFloat64(bytes[:8])))
+		b.WriteString(m.styles.Bit64.Render(m.formatFloat64(bytes[:8])))
 	} else {
 		b.WriteString("-")
 	}
